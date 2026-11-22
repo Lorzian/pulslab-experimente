@@ -1,0 +1,142 @@
+# PulsLab
+
+Aplicație locală pentru proiectul didactic Arduino Uno + MAX30100. React, Vite, JavaScript și Tailwind CSS v4. Procesarea se face exclusiv în browser; nu există server de date și nu se trimit măsurători în cloud.
+
+## Instalare și rulare
+
+Node.js 20.19+ sau 22.12+ și npm. Pentru USB: Chrome sau Edge desktop pe localhost. Pe telefon se poate folosi simulatorul; conectarea USB nu este garantată.
+
+```sh
+cd pulslab-web
+npm install
+npm run dev
+```
+
+Deschide adresa afișată de Vite. Apasă **Pornește demo**, așteaptă aproximativ 5–10 secunde și verifică pulsul. Pentru hardware, închide Serial Monitor din Arduino IDE și apasă **Conectează Arduino**.
+
+```sh
+npm test
+npm run build
+npm run preview
+```
+
+Dacă există pnpm instalat, comenzile echivalente sunt `pnpm install`, `pnpm dev`, `pnpm test`, `pnpm build`.
+
+## Funcții
+
+- W1–W2: conectare USB la 115200 baud, citire pe fragmente, deconectare, contor de linii invalide.
+- W3–W4: estimare DC exponențială (constantă 1,5 s), trece-jos de ordin 1 configurabil, inversare, maxime locale cu prag adaptiv și perioadă refractară; BPM din mediana ultimelor 7 intervale; SpO₂ din raportul AC/DC pe 4 secunde.
+- W5–W8: canvas animat, istoric 5/10/20 secunde, marcaje bătăi, mesaje privind calitatea, rata de recepție măsurată pe 5 secunde, pierderi din secvență, consistența intervalelor și setări live.
+- W9–W12: teme memorate local, layout adaptabil, simulator 100 Hz, scenarii fără deget/mișcare/saturație, jurnal limitat la 100 mesaje. React se actualizează la 5 Hz, graficul separat prin requestAnimationFrame.
+- W13–W14 bonus: export CSV (primele 180.000 eșantioane, aproximativ 30 min), RMSSD și SDNN orientative. W15 nu este implementat.
+
+Funcționalitățile USB și fluiditatea graficului trebuie verificate pe calculatorul și placa folosite la prezentare. Implementarea nu echivalează cu validarea cerințelor pe hardware.
+
+## Structură
+
+```text
+src/
+  main.jsx                   punctul de pornire React
+  App.jsx                    compunerea paginii și starea istoricului graficului
+  communication/
+    protocol.js              parser strict și buffer de linii fragmentate
+    serial.js                conectare, citire, scriere și închidere Web Serial
+  processing/
+    Processor.js             procesare PPG, bătăi, BPM, SpO₂ și verificări
+    statistics.js            medie și deviație standard
+  simulation/
+    simulator.js             date sintetice în protocolul plăcii
+  hooks/
+    useAcquisition.js        ciclul sesiunii USB/demo, mesaje și comenzi
+    useTheme.js              temă și memorare în browser
+  components/                afișare și interacțiuni, separate pe panouri
+    PpgPlot.jsx              desenarea graficului prin requestAnimationFrame
+  utils/
+    csv.js                   serializare CSV și descărcare în browser
+    format.js                formatarea valorilor pentru afișare
+  styles.css                 teme și layout responsive
+tests/
+  core.test.js               protocol, BPM, pierderi și situații limită
+  csv.test.js                integritatea coloanelor și valorilor exportate
+```
+
+Fluxul datelor: **Web Serial sau simulator → parser → Processor → sesiune → componente**.
+`Processor` primește obiecte cu `sequence`, `ir`, `red`, fără să cunoască React sau DOM.
+Graficul citește punctele dintr-o referință, iar valorile interfeței se actualizează la 5 Hz;
+procesarea continuă să se execute pentru fiecare eșantion primit.
+
+## Calitatea codului și contribuțiile echipei
+
+Codul folosește JavaScript, comentarii în română și nume de identificatori în engleză.
+Comentariile explică ipotezele, unitățile și gestionarea resurselor, fără să repete fiecare instrucțiune.
+Pentru formatare consecventă:
+
+```sh
+npm run format
+npm run format:check
+npm test
+npm run build
+```
+
+Fiecare membru lucrează într-o ramură pentru o schimbare concretă și face commit-uri când încheie
+o etapă reală. Commit-urile trebuie să păstreze autorul care a realizat contribuția. Schimbările
+asistate de Codex sunt marcate ca atare și nu se prezintă drept contribuțiile altor membri.
+Cerința de minimum 15 commit-uri și participarea tuturor membrilor rămân de îndeplinit pe parcursul
+proiectului; separarea artificială a aceleiași modificări nu înlocuiește contribuțiile reale.
+
+Punctul inițial de restaurare este ramura GitHub `backup/versiune-initiala-2026-11-07`, la commit-ul
+`885a5a20b3c487f60623d9f41ca333a4db387fac`. Refactorizarea se verifică într-o ramură separată
+înainte de integrarea în `main` și de publicare.
+
+## Conectare hardware
+
+| MAX30100 | Arduino Uno                     |
+| -------- | ------------------------------- |
+| VIN      | 5 V, conform modulului utilizat |
+| GND      | GND                             |
+| SCL      | A5                              |
+| SDA      | A4                              |
+| INT      | D2, opțional                    |
+
+Firmware-ul pentru Uno + MAX30100 se află în `firmware/PulsLab/PulsLab.ino`.
+Pașii de încărcare, configurația și verificările hardware sunt în [ghidul firmware](firmware/README.md).
+Folosește doar Wire și transmite date brute la 100 Hz. Această versiune necesită MAX30100;
+MAX30102 are alte registre și necesită un driver separat.
+
+## Protocol
+
+Fiecare linie se termină cu `\n` (se acceptă și CRLF).
+
+| Direcție    | Mesaj                | Semnificație                                       |
+| ----------- | -------------------- | -------------------------------------------------- |
+| Placă → web | `D,<nr>,<ir>,<red>`  | Secvență crescătoare și valori ADC întregi 0–65535 |
+| Placă → web | `#text`, `#ERR text` | Mesaj informativ sau eroare                        |
+| Web → placă | `L7,7`               | Indecși LED IR și RED 0–15                         |
+| Web → placă | `P` / `S`            | Pauză / pornire                                    |
+| Web → placă | `?`                  | Interogare configurație                            |
+
+Timpul semnalului este calculat ca `nr × 10 ms`, presupunând firmware la 100 Hz. Rata afișată este rata efectivă de recepție în browser; transportul USB poate livra date în loturi. Secvențele care scad sunt tratate ca restart al achiziției. Pierderile se numără cumulativ în sesiune. Numărătoarea bătăilor și timestampurile nu sunt o măsurare de timp validată pe hardware.
+
+## Algoritmi și limite
+
+Pragul de prezență implicit 5000 ADC și pragurile de calitate sunt euristice: se calibrează pe montajul real. Semnalul este declarat instabil dacă variația RMS este foarte mică sau depășește 4% din DC. Consistența este `100 × (1 − SD(intervale) / medie(intervale))`, limitată inferior la zero. Acest indicator nu este un scor clinic.
+
+SpO₂ se estimează prin `110 − 25 × (AC_RED/DC_RED)/(AC_IR/DC_IR)`, unde AC este deviația standard a valorilor brute pe fereastră. Rezultatele în afara 70–100% nu se afișează. Mișcarea și tranzienții pot produce estimări greșite. Nu există calibrare medicală. RMSSD/SDNN sunt calculate pe maximum 20 intervale și nu sunt echivalente cu un studiu HRV clinic.
+
+## Verificare manuală înainte de predare
+
+1. Demo la 48, 72, 120 BPM; compară după stabilizare. Comută istoricul și setările.
+2. Schimbă scenariile: fără deget și saturație trebuie să invalideze valorile; pentru mișcare urmărește mesajul de instabilitate.
+3. Verifică temele, reîncărcarea paginii și layout la 390 px.
+4. Conectează placa, scoate cablul în timpul achiziției, reconectează; verifică P/S, LED și `?`.
+5. Injectează linii invalide și salturi de secvență; verifică numărătorile. Rulează minimum 5 minute pe hardware, apoi exportă CSV.
+6. Efectuează cele 15 măsurători comparative cerute în îndrumar; documentează separat erorile și limitele reale.
+
+## Referințe de implementare
+
+- https://developer.chrome.com/docs/capabilities/serial
+- https://vite.dev/guide/
+- https://tailwindcss.com/docs/installation/using-vite
+- Caietul de sarcini PulsLab, secțiunile 4.4–4.6.
+
+Prototip exclusiv didactic. Valorile nu au valoare medicală și nu se folosesc pentru diagnostic sau decizii privind sănătatea. Utilizarea AI pentru realizarea aplicației trebuie declarată în Anexa D, conform îndrumarului.
