@@ -38,12 +38,31 @@ export function PpgPlot({ processorRef, historySeconds, running }) {
       const allPoints = processorRef.current.points,
         latestTimeMs = allPoints.at(-1)?.t || historySeconds * 1000;
       const points = allPoints.filter((point) => point.t >= latestTimeMs - historySeconds * 1000);
-      const amplitudeScale = Math.max(100, ...points.map((point) => Math.abs(point.value))) * 1.25;
+      // Centrarea și inversarea sunt exclusiv vizuale: IR brut rămâne intact în date.
+      // Ambele curbe folosesc aceeași scară; zgomotul brut nu este netezit.
+      const rawBaseline = points.reduce((sum, point) => sum + point.ir, 0) / (points.length || 1);
+      const getRawValue = (point) => rawBaseline - point.ir;
+      const amplitudeScale =
+        Math.max(
+          100,
+          ...points.map((point) => Math.max(Math.abs(point.value), Math.abs(getRawValue(point)))),
+        ) * 1.25;
       const getX = (point) =>
           padding +
           ((point.t - latestTimeMs + historySeconds * 1000) / (historySeconds * 1000)) *
             (width - 2 * padding),
         getY = (point) => height / 2 - (point.value / amplitudeScale) * (height / 2 - padding);
+      context.strokeStyle = '#879fe5';
+      context.globalAlpha = 0.75;
+      context.lineWidth = 1.3;
+      context.beginPath();
+      points.forEach((point, index) => {
+        const rawY = height / 2 - (getRawValue(point) / amplitudeScale) * (height / 2 - padding);
+        if (index) context.lineTo(getX(point), rawY);
+        else context.moveTo(getX(point), rawY);
+      });
+      context.stroke();
+      context.globalAlpha = 1;
       context.strokeStyle = '#2bbca4';
       context.lineWidth = 2;
       context.beginPath();
@@ -71,7 +90,7 @@ export function PpgPlot({ processorRef, historySeconds, running }) {
   return (
     <canvas
       ref={canvasRef}
-      aria-label="Grafic în timp real al semnalului PPG filtrat și bătăilor detectate"
+      aria-label="Semnale PPG suprapuse: IR brut centrat și inversat pentru afișare, IR filtrat și bătăi detectate, pe aceeași scară de amplitudine"
       role="img"
     />
   );

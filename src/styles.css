@@ -1,4 +1,10 @@
 @import 'tailwindcss';
+.chart-legend {
+  flex-wrap: wrap;
+}
+.chart-legend i.raw-line {
+  background: #879fe5;
+}
 :root {
   font-family: Inter, 'Segoe UI', sans-serif;
   color: #e3eeeb;

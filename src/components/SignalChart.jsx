@@ -28,8 +28,12 @@ export function SignalChart({
       </div>
       <div className="chart-legend">
         <span>
+          <i className="raw-line" />
+          IR brut · centrat și inversat
+        </span>
+        <span>
           <i />
-          IR filtrat · amplitudine relativă
+          IR filtrat
         </span>
         <span>
           <i className="beat-dot" />
@@ -46,7 +50,10 @@ export function SignalChart({
         )}
       </div>
       <div className="chart-footer">
-        <span>DC eliminat → trece-jos → inversare → detecție vârfuri</span>
+        <span>
+          Aceeași scară de amplitudine. Brutul este centrat și inversat doar pentru comparație;
+          zgomotul nu este filtrat.
+        </span>
         <span className="mono">100 eșantioane/s nominal</span>
       </div>
     </section>
